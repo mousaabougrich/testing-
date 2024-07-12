@@ -1,11 +1,7 @@
 package stage_test.testing.services;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import stage_test.testing.dtos.PlanningDTO;
 import stage_test.testing.entities.Collaborateur;
 import stage_test.testing.entities.Planning;
 import stage_test.testing.entities.Service_Dep;
@@ -21,97 +17,134 @@ import java.util.stream.Collectors;
 @Service
 public class PlanningService {
 
-    private static final Logger logger = LoggerFactory.getLogger(PlanningService.class);
-
     @Autowired
     private PlanningRepository planningRepository;
 
     @Autowired
-    private CollaborateurRepository collaborateurRepository;
+    private ServiceRepository serviceDepRepository;
 
     @Autowired
-    private ServiceRepository serviceRepository;
+    private CollaborateurRepository collaborateurRepository;
 
-    private static final int SATURDAY = Calendar.SATURDAY;
-    private static final int SUNDAY = Calendar.SUNDAY;
+    public List<Planning> getGuardDutySchedule(Date date) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(date);
+        int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
 
-    @Transactional
-    public void updateWeekendPlannings() {
-        List<Service_Dep> services = serviceRepository.findAll();
-        logger.info("Found {} services", services.size());
+        if (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY) {
+            return planningRepository.findByIsGuardDutyTrueAndDate(date);
+        }
 
+        return null;
+    }
+
+    public void updateGuardDutySchedule() {
+        List<Service_Dep> services = getAllServices();
         for (Service_Dep service : services) {
-            List<Collaborateur> collaborateurs = collaborateurRepository.findByServiceDep(service);
-            logger.info("Found {} collaborateurs for service {}", collaborateurs.size(), service.getNom());
-
+            List<Collaborateur> collaborateurs = service.getCollaborateurs();
             if (!collaborateurs.isEmpty()) {
-                Calendar calendar = Calendar.getInstance();
-                int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
+                Collaborateur selectedCollaborateur = collaborateurs.get(0); // Or any logic to select a collaborator
+                Planning planning = new Planning();
+                planning.setCollaborateur(selectedCollaborateur);
+                planning.setServiceDep(service);
+                planning.setDate(getNextSaturdayOrSunday());
+                planning.setGuardDuty(true);
 
-                if (dayOfWeek == SATURDAY || dayOfWeek == SUNDAY) {
-                    Planning lastWeekendPlanning = planningRepository.findTopByServiceDepOrderByDateDesc(service);
-                    Collaborateur nextCollaborateur;
-
-                    if (lastWeekendPlanning == null) {
-                        nextCollaborateur = collaborateurs.get(0);
-                    } else {
-                        int lastCollaborateurIndex = collaborateurs.indexOf(lastWeekendPlanning.getCollaborateur());
-                        int nextCollaborateurIndex = (lastCollaborateurIndex + 1) % collaborateurs.size();
-                        nextCollaborateur = collaborateurs.get(nextCollaborateurIndex);
-                    }
-
-                    Planning newPlanning = new Planning();
-                    newPlanning.setCollaborateur(nextCollaborateur);
-                    newPlanning.setServiceDep(service);
-                    newPlanning.setDate(new Date());
-                    planningRepository.save(newPlanning);
-
-                    logger.info("Assigned collaborateur {} to weekend planning for service {}",
-                            nextCollaborateur.getNom(), service.getNom());
-                } else {
-                    logger.info("Today is not a weekend day, no planning created for service {}", service.getNom());
-                }
+                planningRepository.save(planning);
             }
         }
     }
 
-    public List<PlanningDTO> getWeekendPlannings() {
-        Calendar calendar = Calendar.getInstance();
-        int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
-
-        if (dayOfWeek == SATURDAY || dayOfWeek == SUNDAY) {
-            Date startDate = getStartOfCurrentWeekend();
-            Date endDate = getEndOfCurrentWeekend();
-
-            return serviceRepository.findAll().stream()
-                    .flatMap(serviceDep -> planningRepository.findByServiceDepAndDateBetween(serviceDep, startDate, endDate).stream()
-                            .map(planning -> new PlanningDTO(
-                                    planning.getCollaborateur().getNom(),
-                                    planning.getCollaborateur().getPrenom(),
-                                    planning.getServiceDep().getNom(),
-                                    planning.getServiceDep().getSecretaire().getNom(),
-                                    planning.getServiceDep().getSecretaire().getPrenom(),
-                                    planning.getDate())))
-                    .collect(Collectors.toList());
-        }
-
-        logger.info("Today is not a weekend day, no plannings to show");
-        return List.of();
+    public Planning addGuardDuty(Date date, Collaborateur collaborateur, Service_Dep serviceDep) {
+        Planning planning = new Planning();
+        planning.setDate(date);
+        planning.setCollaborateur(collaborateur);
+        planning.setServiceDep(serviceDep);
+        planning.setGuardDuty(true);
+        return planningRepository.save(planning);
     }
 
-    private Date getStartOfCurrentWeekend() {
+    public void fillPlanningTable(Date startDate, Date endDate) {
+        List<Service_Dep> services = getAllServices();
         Calendar calendar = Calendar.getInstance();
-        while (calendar.get(Calendar.DAY_OF_WEEK) != SATURDAY) {
-            calendar.add(Calendar.DATE, -1);
-        }
-        return calendar.getTime();
-    }
+        calendar.setTime(startDate);
 
-    private Date getEndOfCurrentWeekend() {
-        Calendar calendar = Calendar.getInstance();
-        while (calendar.get(Calendar.DAY_OF_WEEK) != SUNDAY) {
+        while (!calendar.getTime().after(endDate)) {
+            int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
+            if (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY) {
+                for (Service_Dep service : services) {
+                    List<Collaborateur> collaborateurs = service.getCollaborateurs();
+                    if (!collaborateurs.isEmpty()) {
+                        Collaborateur nextCollaborateur = getNextCollaborateur(service, calendar.getTime());
+
+                        Planning planning = new Planning();
+                        planning.setDate(calendar.getTime());
+                        planning.setCollaborateur(nextCollaborateur);
+                        planning.setServiceDep(service);
+                        planning.setGuardDuty(true);
+                        planningRepository.save(planning);
+
+                        // Assign the same collaborator for Sunday if today is Saturday
+                        if (dayOfWeek == Calendar.SATURDAY) {
+                            calendar.add(Calendar.DATE, 1); // Move to Sunday
+                            Planning sundayPlanning = new Planning();
+                            sundayPlanning.setDate(calendar.getTime());
+                            sundayPlanning.setCollaborateur(nextCollaborateur);
+                            sundayPlanning.setServiceDep(service);
+                            sundayPlanning.setGuardDuty(true);
+                            planningRepository.save(sundayPlanning);
+                        }
+                    }
+                }
+            }
             calendar.add(Calendar.DATE, 1);
         }
+    }
+
+    private Collaborateur getNextCollaborateur(Service_Dep service, Date date) {
+        List<Collaborateur> collaborateurs = service.getCollaborateurs();
+        List<Collaborateur> availableCollaborateurs = collaborateurs.stream()
+                .filter(c -> !hasRecentGuardDuty(c, date))
+                .collect(Collectors.toList());
+
+        if (availableCollaborateurs.isEmpty()) {
+            return collaborateurs.get(0);
+        }
+
+        return availableCollaborateurs.get(0);
+    }
+
+    private boolean hasRecentGuardDuty(Collaborateur collaborateur, Date date) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(date);
+        calendar.add(Calendar.WEEK_OF_YEAR, -1);
+        Date oneWeekBefore = calendar.getTime();
+
+        List<Planning> recentGuardDuties = planningRepository.findByCollaborateurAndIsGuardDutyTrueAndDateAfterOrderByDateDesc(collaborateur, oneWeekBefore);
+        return !recentGuardDuties.isEmpty();
+    }
+
+    private Date getNextSaturdayOrSunday() {
+        Calendar calendar = Calendar.getInstance();
+        int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
+        if (dayOfWeek != Calendar.SATURDAY) {
+            calendar.add(Calendar.DAY_OF_WEEK, Calendar.SATURDAY - dayOfWeek);
+        }
         return calendar.getTime();
     }
+
+    private List<Service_Dep> getAllServices() {
+        return serviceDepRepository.findAll();
+    }
+
+    private List<Collaborateur> getAllCollaborateurs() {
+        return collaborateurRepository.findAll();
+
+
+
+
+    }
+    public List<Planning> getPlanningByDate(Date date) {
+        return planningRepository.findByDate(date);}
+
 }

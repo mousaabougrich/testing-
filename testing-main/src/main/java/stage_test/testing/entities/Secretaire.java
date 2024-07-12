@@ -10,6 +10,6 @@ import lombok.Data;
 public class Secretaire extends Utilisateur {
     @OneToOne
     @JoinColumn(name = "service_id")
-   // @JsonIgnore
+    @JsonIgnore
     private Service_Dep serviceDep;
 }

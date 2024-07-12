@@ -22,14 +22,14 @@ public class Service_Dep {
     private String nom;
 
     @OneToOne(mappedBy = "serviceDep")
-   // @JsonIgnore
+    @JsonIgnore
     private Secretaire secretaire;
 
     @OneToMany(mappedBy = "serviceDep")
-   // @JsonIgnore
+    @JsonIgnore
     private List<Collaborateur> collaborateurs;
 
     @OneToMany(mappedBy = "serviceDep")
-    //@JsonIgnore
+    @JsonIgnore
     private List<Planning> plannings;
 }

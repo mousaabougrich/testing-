@@ -26,4 +26,6 @@ public class Planning {
 
     @Temporal(TemporalType.DATE)
     private Date date;
+
+    private boolean isGuardDuty;
 }

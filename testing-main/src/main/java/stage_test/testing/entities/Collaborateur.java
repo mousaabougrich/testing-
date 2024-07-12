@@ -21,10 +21,10 @@ public class Collaborateur {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "service_id")
-   // @JsonIgnore
+   @JsonIgnore
     private Service_Dep serviceDep;
 
     @OneToMany(mappedBy = "collaborateur")
-    //@JsonIgnore
+    @JsonIgnore
     private List<Planning> plannings;
 }
