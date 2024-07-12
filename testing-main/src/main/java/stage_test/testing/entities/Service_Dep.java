@@ -1,6 +1,7 @@
 package stage_test.testing.entities;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -12,7 +13,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
-@Table(uniqueConstraints = @UniqueConstraint(columnNames = "nom"))
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Service_Dep {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,14 +23,13 @@ public class Service_Dep {
     private String nom;
 
     @OneToOne(mappedBy = "serviceDep")
-    @JsonIgnore
     private Secretaire secretaire;
 
     @OneToMany(mappedBy = "serviceDep")
-    @JsonIgnore
+    @JsonManagedReference
     private List<Collaborateur> collaborateurs;
 
     @OneToMany(mappedBy = "serviceDep")
-    @JsonIgnore
+    @JsonManagedReference
     private List<Planning> plannings;
 }
