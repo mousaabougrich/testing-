@@ -1,3 +1,7 @@
+
+
+
+
 package stage_test.testing.repositories;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,5 +21,6 @@ public interface PlanningRepository extends JpaRepository<Planning, Integer> {
 
     @Query("SELECT p FROM Planning p WHERE p.collaborateur = :collaborateur AND p.isGuardDuty = true AND p.date > :date ORDER BY p.date DESC")
     List<Planning> findByCollaborateurAndIsGuardDutyTrueAndDateAfterOrderByDateDesc(Collaborateur collaborateur, Date date);
-    List<Planning> findByDate(Date date);
+
+    List<Planning> findByDate(Date date); // Add this method
 }

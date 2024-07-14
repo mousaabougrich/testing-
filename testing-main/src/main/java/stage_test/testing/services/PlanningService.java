@@ -43,14 +43,12 @@ public class PlanningService {
         for (Service_Dep service : services) {
             List<Collaborateur> collaborateurs = service.getCollaborateurs();
             if (!collaborateurs.isEmpty()) {
-                Collaborateur selectedCollaborateur = collaborateurs.get(0); // Or any logic to select a collaborator
-                Planning planning = new Planning();
-                planning.setCollaborateur(selectedCollaborateur);
-                planning.setServiceDep(service);
-                planning.setDate(getNextSaturdayOrSunday());
-                planning.setGuardDuty(true);
+                Collaborateur selectedCollaborator = getNextWeekendCollaborator(service, new Date()); // Select a collaborator based on logic
+                Date nextSaturday = getNextSaturday();
+                Date nextSunday = getNextSunday(nextSaturday);
 
-                planningRepository.save(planning);
+                scheduleGuardDuty(nextSaturday, selectedCollaborator, service);
+                scheduleGuardDuty(nextSunday, selectedCollaborator, service);
             }
         }
     }
@@ -70,29 +68,17 @@ public class PlanningService {
         calendar.setTime(startDate);
 
         while (!calendar.getTime().after(endDate)) {
+            Date currentDate = calendar.getTime();
             int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
-            if (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY) {
+
+            if (dayOfWeek == Calendar.SATURDAY) {
                 for (Service_Dep service : services) {
                     List<Collaborateur> collaborateurs = service.getCollaborateurs();
                     if (!collaborateurs.isEmpty()) {
-                        Collaborateur nextCollaborateur = getNextCollaborateur(service, calendar.getTime());
-
-                        Planning planning = new Planning();
-                        planning.setDate(calendar.getTime());
-                        planning.setCollaborateur(nextCollaborateur);
-                        planning.setServiceDep(service);
-                        planning.setGuardDuty(true);
-                        planningRepository.save(planning);
-
-                        // Assign the same collaborator for Sunday if today is Saturday
-                        if (dayOfWeek == Calendar.SATURDAY) {
-                            calendar.add(Calendar.DATE, 1); // Move to Sunday
-                            Planning sundayPlanning = new Planning();
-                            sundayPlanning.setDate(calendar.getTime());
-                            sundayPlanning.setCollaborateur(nextCollaborateur);
-                            sundayPlanning.setServiceDep(service);
-                            sundayPlanning.setGuardDuty(true);
-                            planningRepository.save(sundayPlanning);
+                        Collaborateur selectedCollaborator = getNextWeekendCollaborator(service, currentDate);
+                        if (selectedCollaborator != null) {
+                            scheduleGuardDuty(currentDate, selectedCollaborator, service);
+                            scheduleGuardDuty(getNextSunday(currentDate), selectedCollaborator, service);
                         }
                     }
                 }
@@ -101,14 +87,27 @@ public class PlanningService {
         }
     }
 
-    private Collaborateur getNextCollaborateur(Service_Dep service, Date date) {
+    private void scheduleGuardDuty(Date date, Collaborateur collaborator, Service_Dep service) {
+        Planning planning = new Planning();
+        planning.setCollaborateur(collaborator);
+        planning.setServiceDep(service);
+        planning.setDate(date);
+        planning.setGuardDuty(true);
+        planningRepository.save(planning);
+    }
+
+    private Collaborateur getNextWeekendCollaborator(Service_Dep service, Date date) {
         List<Collaborateur> collaborateurs = service.getCollaborateurs();
         List<Collaborateur> availableCollaborateurs = collaborateurs.stream()
-                .filter(c -> !hasRecentGuardDuty(c, date))
+                .filter(c -> isAvailable(c, date) && !hasRecentGuardDuty(c, date))
                 .collect(Collectors.toList());
 
         if (availableCollaborateurs.isEmpty()) {
-            return collaborateurs.get(0);
+            availableCollaborateurs = collaborateurs.stream().filter(c -> isAvailable(c, date)).collect(Collectors.toList());
+        }
+
+        if (availableCollaborateurs.isEmpty()) {
+            return null;
         }
 
         return availableCollaborateurs.get(0);
@@ -124,12 +123,24 @@ public class PlanningService {
         return !recentGuardDuties.isEmpty();
     }
 
-    private Date getNextSaturdayOrSunday() {
+    private boolean isAvailable(Collaborateur collaborateur, Date date) {
+        Date nextSunday = getNextSunday(date);
+        return collaborateur.getDisponibilites().stream()
+                .noneMatch(disponibilite -> !date.before(disponibilite.getStartDate()) && !nextSunday.after(disponibilite.getEndDate()));
+    }
+
+    private Date getNextSaturday() {
         Calendar calendar = Calendar.getInstance();
         int dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK);
-        if (dayOfWeek != Calendar.SATURDAY) {
-            calendar.add(Calendar.DAY_OF_WEEK, Calendar.SATURDAY - dayOfWeek);
-        }
+        int daysUntilSaturday = (Calendar.SATURDAY - dayOfWeek + 7) % 7;
+        calendar.add(Calendar.DAY_OF_WEEK, daysUntilSaturday);
+        return calendar.getTime();
+    }
+
+    private Date getNextSunday(Date nextSaturday) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(nextSaturday);
+        calendar.add(Calendar.DATE, 1);
         return calendar.getTime();
     }
 
@@ -139,12 +150,9 @@ public class PlanningService {
 
     private List<Collaborateur> getAllCollaborateurs() {
         return collaborateurRepository.findAll();
-
-
-
-
     }
-    public List<Planning> getPlanningByDate(Date date) {
-        return planningRepository.findByDate(date);}
 
+    public List<Planning> getPlanningByDate(Date date) {
+        return planningRepository.findByDate(date);
+    }
 }

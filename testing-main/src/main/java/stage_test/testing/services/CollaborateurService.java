@@ -5,10 +5,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import stage_test.testing.dtos.CollaborateurDTO;
 import stage_test.testing.entities.Collaborateur;
+import stage_test.testing.entities.Disponibilite;
 import stage_test.testing.entities.Service_Dep;
 import stage_test.testing.repositories.CollaborateurRepository;
+import stage_test.testing.repositories.DisponibiliteRepository;
 import stage_test.testing.repositories.ServiceRepository;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -21,6 +24,8 @@ public class CollaborateurService {
 
     @Autowired
     private ServiceRepository serviceRepository;
+    @Autowired
+    private DisponibiliteRepository disponibiliteRepository;
 
 
     public CollaborateurDTO addCollaborateur(Collaborateur collaborateur, String serviceName) {
@@ -64,5 +69,13 @@ public class CollaborateurService {
         return collaborateurs.stream()
                 .map(collaborateur -> new CollaborateurDTO(collaborateur.getId_col(), collaborateur.getNom(), collaborateur.getPrenom(), serviceDep.getNom()))
                 .collect(Collectors.toList());
+    }
+    public Disponibilite addDisponibilite(Long collaborateurId, Date startDate, Date endDate) {
+        Collaborateur collaborateur = collaborateurRepository.findById(collaborateurId).orElseThrow(() -> new IllegalArgumentException("Invalid collaborateur ID"));
+        Disponibilite disponibilite = new Disponibilite();
+        disponibilite.setStartDate(startDate);
+        disponibilite.setEndDate(endDate);
+        disponibilite.setCollaborateur(collaborateur);
+        return disponibiliteRepository.save(disponibilite);
     }
 }

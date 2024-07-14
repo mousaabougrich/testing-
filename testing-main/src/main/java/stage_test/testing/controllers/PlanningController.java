@@ -4,8 +4,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import stage_test.testing.entities.Collaborateur;
+import stage_test.testing.entities.Disponibilite;
 import stage_test.testing.entities.Planning;
 import stage_test.testing.entities.Service_Dep;
+import stage_test.testing.services.CollaborateurService;
 import stage_test.testing.services.PlanningService;
 
 import java.util.Date;
@@ -17,6 +19,9 @@ public class PlanningController {
 
     @Autowired
     private PlanningService planningService;
+
+    @Autowired
+    private CollaborateurService collaborateurService;
 
     @GetMapping("/guard-schedule")
     public List<Planning> getGuardDutySchedule(@RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") Date date) {
@@ -50,5 +55,14 @@ public class PlanningController {
     @GetMapping("/by-date")
     public List<Planning> getPlanningByDate(@RequestParam("date") @DateTimeFormat(pattern = "yyyy-MM-dd") Date date) {
         return planningService.getPlanningByDate(date);
+    }
+
+    @PostMapping("/collaborateur/{collaborateurId}/disponibilite")
+    public Disponibilite addDisponibilite(@PathVariable Long collaborateurId,
+                                          @RequestParam("startDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
+                                          @RequestParam("endDate") @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate) {
+        Disponibilite disponibilite = collaborateurService.addDisponibilite(collaborateurId, startDate, endDate);
+        planningService.updateGuardDutySchedule(); // Update planning after changing disponibilite
+        return disponibilite;
     }
 }
